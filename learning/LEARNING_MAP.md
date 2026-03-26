@@ -1,10 +1,10 @@
 # 学习地图与学习路线
 
-> **怎么用这张图**：每个阶段 = 少量阅读 + 1 个仓库内「锚点」+ 1 个自检问题。不要按字母顺序扫 `services/`。
+> 目标不是“读完仓库”，而是先建立 4 个稳定心智模型：`Builder / 不可变配置 / HTTP SPI / 异步管线`。这四块一旦立住，再看 `core`、`codegen`、`services-custom` 才不容易迷路。
 
 ---
 
-## 一、总览地图（模块 → 你该学什么）
+## 一、总览地图（模块 → 你真正要学什么）
 
 ```mermaid
 flowchart LR
@@ -30,88 +30,66 @@ flowchart LR
   runtime --> high
 ```
 
-| 区域 | 优先读 | 学到什么 |
-|------|--------|----------|
-| `docs/guidelines/` | General、ClientConfiguration、Async | 团队 API 风格：Builder、不可变配置、异步约定 |
-| `docs/BestPractices.md` | 全文 | 生产用法：超时、重试、凭证、客户端生命周期 |
-| `http-client-spi` + `http-clients` | 接口 → 任一实现 | **SPI / 插件化**：核心与 HTTP 实现解耦 |
-| `core` | 从公开 Client 入口往管线追 | 拦截器链、执行管线、同步/异步分叉 |
-| `codegen` + `test/protocol-tests` | 生成入口 + 协议测试 | 规模化一致 API + 回归策略 |
-| `services-custom` | DynamoDB Enhanced 等 | 在生成代码之上做「更好用」的一层 |
-| 多数 `services/*` | **测试类**优于源码全文 | 生成代码很长；测试更短、更贴近用法 |
+| 区域 | 先看什么 | 你真正要得到什么 |
+|------|----------|------------------|
+| `docs/BestPractices.md` | Client 生命周期、流关闭、超时 | 先知道“正确使用姿势”，别一上来只看实现 |
+| `docs/guidelines/ClientConfiguration.md` | Configuration Fields 一节 | 为什么 SDK 到处是 Builder、不可变对象、防御性拷贝 |
+| `http-client-spi` | `SdkHttpClient` | 核心语义和“发 HTTP”是怎么切开的 |
+| `core` | `SdkDefaultClientBuilder`、配置类、测试 | 默认值、override、sync/async 分叉是怎么落地的 |
+| `docs/guidelines/async-programming-guidelines.md` | CompletableFuture Guidelines | 异步最容易踩的线程、异常、阻塞问题 |
+| `codegen` + `test/protocol-tests` | 第二轮再看 | 为何服务模块很多，但 API 还能保持统一 |
+| `services-custom` | 第二轮再看 | 手写高阶库如何站在生成客户端之上 |
 
 ---
 
-## 二、分阶段路线（推荐 4～6 周，可按周折叠）
+## 二、最短入门顺序（推荐 2～3 次，每次 45～90 分钟）
 
-### 阶段 A — 规范与用法（1 周）
+这条顺序故意**不按仓库目录顺序**走，而是按“先有反馈，再回真代码找锚点”走。
 
-| 天 | 阅读 | 仓库锚点（搜索或打开） | 验收问题（能口头答出即可） |
-|----|------|------------------------|----------------------------|
-| 1–2 | `docs/guidelines/aws-sdk-java-v2-general.md` | `UseOfOptional.md`、`FavorStaticFactoryMethods.md` | 为什么更倾向静态工厂而不是 public 构造器？ |
-| 3–4 | `docs/BestPractices.md` | 任选常用服务的 `*Test.java` | 客户端应该每次 new 还是复用？为什么？ |
-| 5 | `docs/guidelines/ClientConfiguration.md` | 任意 `*Configuration` 或 Builder 类 | Builder 里 List/Map 通常要如何防御性拷贝？ |
+| 步骤 | 先读什么 | 先跑什么 demo | 再看哪段真代码 | 这一步只回答一个问题 |
+|------|----------|----------------|----------------|----------------------|
+| 1 | `learning/NOTES.md` 的「心智模型」「设计词汇」+ `docs/BestPractices.md` 前几节 + `docs/guidelines/ClientConfiguration.md` 的 Configuration Fields | `BuilderAndImmutableConfigDemo` | `core/sdk-core/src/main/java/software/amazon/awssdk/core/client/config/ClientOverrideConfiguration.java` 和对应测试 `core/sdk-core/src/test/java/software/amazon/awssdk/core/client/config/ClientOverrideConfigurationTest.java` | 为什么 SDK 大量使用 Builder、不可变对象、集合拷贝？ |
+| 2 | 回看 `learning/NOTES.md` 第 1 节，然后直接读 `http-client-spi/src/main/java/software/amazon/awssdk/http/SdkHttpClient.java` | `HttpClientSpiDemo` | `core/sdk-core/src/main/java/software/amazon/awssdk/core/client/builder/SdkDefaultClientBuilder.java` 里 `syncClientConfiguration()` / `asyncClientConfiguration()` 的合并顺序 | 哪层负责“语义与策略”，哪层只负责“发 HTTP”？ |
+| 3 | `docs/guidelines/async-programming-guidelines.md` 的 CompletableFuture Guidelines | `AsyncPipelineMiniDemo` | 搜索 `CompletableFutureUtils` 的使用点，优先看 `codegen/src/main/java/software/amazon/awssdk/codegen/poet/client/AsyncClientClass.java` | 为什么异步 API 最怕“在线程、异常、取消传播上想当然”？ |
 
-**阶段 A 完成标准**：能画出「应用代码 → Client → HTTP → AWS」的一层一层方块图（不必精确类名）。
-
----
-
-### 阶段 B — HTTP 与 SPI（1～2 周）
-
-| 天 | 阅读 | 仓库锚点 | 验收问题 |
-|----|------|----------|----------|
-| 1–3 | `docs/guidelines/async-programming-guidelines.md`（前半） | `http-client-spi` 中核心接口 | SPI 与具体实现各解决什么问题？ |
-| 4–7 | 同上（CompletableFuture 部分） | `http-clients` 中一个同步 + 一个异步实现对比 | 异步路径上哪些对象必须线程安全？ |
-
-**阶段 B 完成标准**：能说明「换 HTTP 实现」需要动哪几层、哪层**不该**动。
+如果你只有 1 小时，只做前两步；这已经足够建立对仓库主体结构的第一版认知。
 
 ---
 
-### 阶段 C — 核心管线（2 周）
+## 三、我建议这样学，而不是照旧版“分周课程表”学
 
-| 周 | 做法 | 验收问题 |
-|----|------|----------|
-| 1 | IDE 从某个 `*Client` 的 `operation` 方法往里 Step Into / Call Hierarchy | 拦截器大致插在什么位置？ |
-| 2 | 对照 `docs/guidelines/logging-guidelines.md` 找日志点 | 为何要避免「又打日志又抛同一错误」的重复？ |
-
-**阶段 C 完成标准**：能用自己的话描述一次 API 调用从「方法入口」到「发出 HTTP」的关键步骤（5～8 步即可）。
-
----
-
-### 阶段 D — 生成与测试（1～2 周）
-
-| 阅读 | 仓库锚点 | 验收问题 |
-|------|----------|----------|
-| `docs/guidelines/code-generation-guidelines.md` | `codegen/` 中 generator 包 | 生成代码如何保证风格一致？ |
-| `docs/guidelines/testing-guidelines.md` | `test/protocol-tests` 目录结构 | 协议测试主要防什么类回归？ |
-
-**阶段 D 完成标准**：能解释「为什么服务模块多但表面 API 仍像一家人」。
+- **先跑 demo，再回仓库找锚点。** 学 SDK 这种大仓库，最怕概念先行、反馈滞后。demo 能给你一个可感知的最小模型，然后真代码只是“放大版”，而不是陌生物种。
+- **先看配置与 SPI，再看 `core` 深处。** `ClientOverrideConfiguration` 和 `SdkHttpClient` 这两个点短、稳定、复用率高，比一上来深啃执行管线更划算。
+- **`docs/guidelines/aws-sdk-java-v2-general.md` 不该作为第一份文档。** 它更像“准备贡献代码前的团队约束”，不是你理解架构的最好起点。
+- **第二轮才看 `codegen` 和 `docs/design/`。** 第一轮先回答“这个仓库怎么跑起来、怎么分层”；第二轮再回答“为什么这么大还能统一”和“为什么方案选 A 不选 B”。
+- **优先看短测试，而不是长生成代码。** 例如 `ClientOverrideConfigurationTest` 比很多服务模块源码更能直接暴露设计意图。
 
 ---
 
-### 阶段 E — 高阶库与设计（持续）
+## 四、读完前三步后，再怎么扩展
 
-| 阅读 | 仓库锚点 | 验收问题 |
-|------|----------|----------|
-| `docs/design/README.md` 里 **Released** 条目 | 对应 `docs/design/.../README.md` | 该特性解决的用户痛点用一句话怎么说？ |
-| DynamoDB Enhanced 相关设计 | `services-custom` 下 dynamodb-enhanced | 增强客户端与「底层生成客户端」边界在哪？ |
-
----
-
-## 三、与 `learning/examples` 的对照
-
-| 阶段 | 建议跑的范例类 | 目的 |
-|------|----------------|------|
-| A | `BuilderAndImmutableConfigDemo` | 体会 Builder + 防御性拷贝 |
-| B | `HttpClientSpiDemo` | 迷你 SPI：同一「客户端」换两种 fake 实现 |
-| C | `AsyncPipelineMiniDemo` | CompletableFuture 组合与「别阻塞事件线程」 |
-| D | （仓库内读 codegen） | 范例侧重 A–C；D 以阅读为主 |
-| E | （读 design 文档） | 同上 |
+| 你的目标 | 下一步怎么扩展 |
+|----------|----------------|
+| 想理解一次调用怎样进入核心管线 | 从某个熟悉服务的 `*Client` operation 往内 Step Into，然后回到 `SdkDefaultClientBuilder` 对照默认值和 override 是何时灌进去的 |
+| 想理解“为什么服务 API 看起来像一家人” | 看 `docs/guidelines/code-generation-guidelines.md`，再浏览 `test/protocol-tests/src/main/resources/codegen-resources/` |
+| 想理解高阶 API 怎么包在生成客户端之上 | 读 `docs/design/README.md` 里的 Released 条目，再去 `services-custom` 看对应实现 |
+| 想为仓库提 PR | 回头系统读 `docs/guidelines/aws-sdk-java-v2-general.md`、`testing-guidelines.md`、`logging-guidelines.md` |
 
 ---
 
-## 四、反模式（省时间）
+## 五、与 `learning/examples` 的对应关系
 
-- 从 `services/s3/src/main/java/...` 逐行通读生成源码：信息密度低，易疲劳。
-- 未建立阶段 A/B 就直接深啃 `core` 内部包：缺少「地图」容易迷失。
-- 忽略 `docs/guidelines/`：你会错过团队认为最重要的「隐性规范」。
+| demo | 最好在什么时候跑 | 目的 |
+|------|------------------|------|
+| `BuilderAndImmutableConfigDemo` | 第一轮第 1 步 | 先把 Builder、不可变对象、防御性拷贝变成“肉眼能看懂”的行为 |
+| `HttpClientSpiDemo` | 第一轮第 2 步 | 把“换 HTTP 实现不该影响高层 client”这件事跑出来 |
+| `AsyncPipelineMiniDemo` | 第一轮第 3 步 | 把 `thenCompose`、并行组合、异常传播的基本感觉建立起来 |
+
+---
+
+## 六、反模式（这些最浪费时间）
+
+- 从 `services/s3/src/main/java/...` 开始逐行通读生成源码。信息密度低，而且非常容易把“生成产物”误当成“设计入口”。
+- 还没建立 `Builder / 配置 / SPI` 三块模型，就直接深啃 `core` 的内部包。这样通常只会记住类名，记不住边界。
+- 把 `docs/design/` 当成入门材料。设计文档回答的是“为什么选这个方案”，不是“仓库主路径怎么运转”。
+- 试图一次读完所有 guideline。第一轮只需要 `BestPractices`、`ClientConfiguration`、`async-programming-guidelines`，别把自己淹死。

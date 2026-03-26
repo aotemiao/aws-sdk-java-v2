@@ -6,8 +6,18 @@
 
 ```bash
 cd learning/examples
-mvn -q compile exec:java -Dexec.mainClass="software.amazon.awssdk.learning.examples.RunAllDemos"
+mvn -q compile exec:java
 ```
+
+`pom.xml` 已经把 `RunAllDemos` 配成默认入口，不需要额外传 `-Dexec.mainClass=...`。
+
+## 建议运行顺序
+
+1. `BuilderAndImmutableConfigDemo`
+2. `HttpClientSpiDemo`
+3. `AsyncPipelineMiniDemo`
+
+不要先跑 `RunAllDemos` 再结束。更好的做法是单独看每个 demo 的输出，然后立刻回主仓库找对应锚点。
 
 ## 范例一览
 
@@ -21,6 +31,6 @@ mvn -q compile exec:java -Dexec.mainClass="software.amazon.awssdk.learning.examp
 
 读完每个类的类内简短注释后，在仓库中搜索：
 
-- `Builder` → 任意 `*Client.builder()`
-- `SdkHttpClient` → `http-client-spi` 包
-- `CompletableFuture` → `async` 客户端返回类型
+- `BuilderAndImmutableConfigDemo` → `core/sdk-core/.../ClientOverrideConfiguration.java` 和对应测试
+- `HttpClientSpiDemo` → `http-client-spi/.../SdkHttpClient.java`
+- `AsyncPipelineMiniDemo` → `docs/guidelines/async-programming-guidelines.md` 与 `CompletableFutureUtils` 的使用点
